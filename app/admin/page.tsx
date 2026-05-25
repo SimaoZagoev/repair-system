@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Navbar from '@/components/Navbar'
+import { exportToExcel } from '@/lib/excel'
 
 interface Ticket {
   id: string
@@ -8,11 +9,16 @@ interface Ticket {
   created_at: string
   reporter_name: string
   department: string
+  phone: string
+  email: string
   device_type: string
+  asset_code: string
+  problem_desc: string
   priority: string
   status: string
   technician_name: string | null
   resolved_at: string | null
+  resolution_note: string | null
 }
 
 function formatDate(d: string) {
@@ -77,12 +83,10 @@ export default function AdminPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--primary-dark)', margin: 0 }}>📊 Admin Dashboard</h1>
-            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>ภาพรวมระบบแจ้งซ่อมไอที เทศบาลตำบลสันทราย</p>
-          </div>
-          <button className="btn-primary" onClick={fetchTickets}>🔄 รีเฟรช</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-primary" onClick={fetchTickets} style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}> 🔄 รีเฟรช  </button>
+          <button className="btn-primary" onClick={() => exportToExcel(tickets)} style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}> 📊 Export Excel </button>
+          <a href="/login" className="btn-primary" style={{ background: 'linear-gradient(135deg,#6366F1,#4F46E5)', textDecoration: 'none' }}> 🔑 Login </a>
         </div>
 
         {/* Stat Cards */}

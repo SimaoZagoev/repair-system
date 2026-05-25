@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendTicketConfirmation } from '@/lib/resend'
+import { notifyNewTicket } from '@/lib/line'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,7 +11,6 @@ const supabase = createClient(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.formData()
-
     const reporter_name = body.get('reporter_name') as string
     const department    = body.get('department') as string
     const phone         = body.get('phone') as string
@@ -20,7 +21,6 @@ export async function POST(req: NextRequest) {
     const priority      = body.get('priority') as string
     const imageFile     = body.get('image') as File | null
 
-    // Upload รูปภาพ (ถ้ามี)
     let image_url = null
     if (imageFile && imageFile.size > 0) {
       const ext = imageFile.name.split('.').pop()
@@ -29,14 +29,12 @@ export async function POST(req: NextRequest) {
       const { error: uploadError } = await supabase.storage
         .from('repair-images')
         .upload(filename, arrayBuffer, { contentType: imageFile.type })
-
       if (!uploadError) {
         const { data: urlData } = supabase.storage.from('repair-images').getPublicUrl(filename)
         image_url = urlData.publicUrl
       }
     }
 
-    // บันทึกลง Database
     const { data, error } = await supabase
       .from('tickets')
       .insert([{ reporter_name, department, phone, email, device_type, asset_code, problem_desc, priority, image_url, ticket_no: '' }])
@@ -45,11 +43,32 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({ success: true, ticketNo: data.ticket_no })
+    // ส่ง Email ยืนยัน
+    try {
+      await sendTicketConfirmation(email, data.ticket_no, {
+        reporterName: reporter_name,
+        deviceType: device_type,
+        problemDesc: problem_desc,
+        priority,
+      })
+    } catch (e) { console.error('Email error:', e) }
 
-  } catch (err: unknown) {
+    // แจ้ง Line
+    try {
+      await notifyNewTicket({
+        ticketNo: data.ticket_no,
+        reporterName: reporter_name,
+        department,
+        deviceType: device_type,
+        problemDesc: problem_desc,
+        priority,
+      })
+    } catch (e) { console.error('Line error:', e) }
+
+    return NextResponse.json({ success: true, ticketNo: data.ticket_no })
+  } catch (err) {
     console.error(err)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' }, { status: 500 })
+    return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
   }
 }
 
@@ -58,7 +77,6 @@ export async function GET() {
     .from('tickets')
     .select('*')
     .order('created_at', { ascending: false })
-
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
