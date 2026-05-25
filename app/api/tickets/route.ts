@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { sendTicketConfirmation } from '@/lib/resend'
-import { notifyNewTicket } from '@/lib/line'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +18,12 @@ export async function POST(req: NextRequest) {
     const problem_desc  = body.get('problem_desc') as string
     const priority      = body.get('priority') as string
     const imageFile     = body.get('image') as File | null
+
+    // DEBUG: เช็ค env
+    console.log('=== ENV CHECK ===')
+    console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ มีค่า' : '❌ ไม่มีค่า')
+    console.log('LINE_TOKEN:', process.env.LINE_CHANNEL_ACCESS_TOKEN ? '✅ มีค่า' : '❌ ไม่มีค่า')
+    console.log('LINE_ADMIN_ID:', process.env.LINE_ADMIN_USER_ID ? '✅ มีค่า' : '❌ ไม่มีค่า')
 
     let image_url = null
     if (imageFile && imageFile.size > 0) {
@@ -43,18 +47,25 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
-    // ส่ง Email ยืนยัน
+    // ส่ง Email
+    console.log('=== SENDING EMAIL to:', email)
     try {
+      const { sendTicketConfirmation } = await import('@/lib/resend')
       await sendTicketConfirmation(email, data.ticket_no, {
         reporterName: reporter_name,
         deviceType: device_type,
         problemDesc: problem_desc,
         priority,
       })
-    } catch (e) { console.error('Email error:', e) }
+      console.log('✅ Email sent successfully')
+    } catch (e) {
+      console.error('❌ Email error:', JSON.stringify(e))
+    }
 
-    // แจ้ง Line
+    // ส่ง Line
+    console.log('=== SENDING LINE notification')
     try {
+      const { notifyNewTicket } = await import('@/lib/line')
       await notifyNewTicket({
         ticketNo: data.ticket_no,
         reporterName: reporter_name,
@@ -63,11 +74,14 @@ export async function POST(req: NextRequest) {
         problemDesc: problem_desc,
         priority,
       })
-    } catch (e) { console.error('Line error:', e) }
+      console.log('✅ Line sent successfully')
+    } catch (e) {
+      console.error('❌ Line error:', JSON.stringify(e))
+    }
 
     return NextResponse.json({ success: true, ticketNo: data.ticket_no })
   } catch (err) {
-    console.error(err)
+    console.error('❌ Main error:', err)
     return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
   }
 }
